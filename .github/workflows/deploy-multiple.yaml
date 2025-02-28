@@ -1,0 +1,56 @@
+name: Multi-Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environments:
+        description: 'Comma separated list of environments to deploy to'
+        type: string
+        required: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      environments: ${{ steps.set-matrix.outputs.environments }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    permissions:
+      actions: read   # This is required for gh api call to get environments
+    steps:
+      - name: Validate environments
+        run: |
+          # Get requested environments array
+          IFS=',' read -ra REQUESTED <<< "${{ inputs.environments }}"
+
+          # Get existing environments from GitHub API
+          EXISTING=$(gh api repos/${{ github.repository }}/environments | jq -r '.environments[].name')
+          if [ $? -ne 0 ]; then
+            echo "Error: Failed to fetch environments from GitHub API"
+            exit 1
+          fi
+
+          # Check each requested environment exists
+          for env in "${REQUESTED[@]}"; do
+            env=$(echo "$env" | tr -d ' ')  # Remove whitespace
+            if ! echo "$EXISTING" | grep -q "^${env}$"; then
+              echo "Error: Environment '$env' does not exist"
+              exit 1
+            fi
+          done
+
+      - name: Set matrix values
+        id: set-matrix
+        run: |
+          echo "environments=[$(echo ${{ inputs.environments }} | sed 's/,/","/g' | sed 's/^/"/;s/$/"/')]" >> $GITHUB_OUTPUT
+
+  run:
+    needs: prepare
+    uses: ./.github/workflows/deploy.yaml
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ fromJson(needs.prepare.outputs.environments) }}
+    with:
+      environment: ${{ matrix.environment }}
+

@@ -1,0 +1,61 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - release/*
+  workflow_dispatch:
+    inputs:
+      disable-cache:
+        description: "Disable docker build cache"
+        required: false
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      aws-region:
+        description: "The AWS region to authenticate with"
+        required: true
+        type: string
+      iam-role:
+        description: "The IAM role to inherit permissions from"
+        required: true
+        type: string
+      ecr-repository-name:
+        description: "The ECR repository name to push to"
+        required: true
+        type: string
+      ecr-cache-repository-name:
+        description: "The ECR repository name to use for caching"
+        required: true
+        type: string
+      disable-cache:
+        description: "Disable docker build cache"
+        required: false
+        type: boolean
+        default: false
+
+    outputs:
+      git_short_sha:
+        description: "The short git sha used to build the image"
+        value: ${{ jobs.build.outputs.git_short_sha }}
+      image_tag:
+        description: "The image tag pushed to the ECR repository"
+        value: ${{ jobs.build.outputs.image_tag }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      git_short_sha: ${{ steps.variables.outputs.git_short_sha }}
+      image_tag: ${{ steps.variables.outputs.image_tag }}
+    steps:
+      - name: Calculate Variables
+        id: variables
+        run: |
+          git_short_sha=$(echo $GITHUB_SHA | cut -c1-7)
+          image_tag=git-short-sha
+          echo "git_short_sha=$git_short_sha" >> $GITHUB_OUTPUT
+          echo "image_tag=$image_tag" >> $GITHUB_OUTPUT
